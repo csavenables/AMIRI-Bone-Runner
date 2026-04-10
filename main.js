@@ -398,6 +398,7 @@ startViewState.camera.target = [...pivotState.world];
 
 let activeIndex = 0;
 let introRotationOffset = 0;
+let viewLockToken = 0;
 let activeAnnotationsConfig = null;
 let liveCameraPose = {
   position: [...(START_VIEW_CONFIG.camera?.position ?? [0, 0.83, 1.44])],
@@ -427,6 +428,12 @@ const orbitState = {
   minPolar: 0.2,
   maxPolar: Math.PI - 0.2,
 };
+const introCancelOnUserInput = INTRO_CONFIG.cancelOnUserInput !== false;
+const introCancelInputTypes = new Set(
+  Array.isArray(INTRO_CONFIG.cancelInputTypes)
+    ? INTRO_CONFIG.cancelInputTypes.map((type) => String(type).toLowerCase())
+    : [],
+);
 
 function getActiveAsset() {
   return MIRIS_ASSETS[activeIndex] ?? null;
@@ -728,6 +735,30 @@ function applyOrbitPose() {
   });
 }
 
+function maybeCancelIntroForInput(event) {
+  if (!introCancelOnUserInput) {
+    return;
+  }
+  if (!(INTRO_CONFIG.enabled && runtime.introEnabled)) {
+    return;
+  }
+  const normalizedType = String(event?.type || "").toLowerCase();
+  if (introCancelInputTypes.size > 0 && !introCancelInputTypes.has(normalizedType)) {
+    return;
+  }
+  if (
+    normalizedType === "pointermove" &&
+    event &&
+    "buttons" in event &&
+    Number(event.buttons) === 0
+  ) {
+    return;
+  }
+  cancelViewLock();
+  annotationManager.stopCameraAnimation?.();
+  introController.cancel("user-input");
+}
+
 function enableSingleOrbitController() {
   if (!orbitState.enabled) {
     return;
@@ -739,6 +770,7 @@ function enableSingleOrbitController() {
   }
 
   const onPointerDown = (event) => {
+    maybeCancelIntroForInput(event);
     if (event.button !== 0 && event.pointerType !== "touch") {
       return;
     }
@@ -752,6 +784,7 @@ function enableSingleOrbitController() {
   };
 
   const onPointerMove = (event) => {
+    maybeCancelIntroForInput(event);
     if (!orbitState.dragging || orbitState.pointerId !== event.pointerId) {
       return;
     }
@@ -782,6 +815,7 @@ function enableSingleOrbitController() {
   };
 
   const onWheel = (event) => {
+    maybeCancelIntroForInput(event);
     const nextRadius = orbitState.radius * (1 + event.deltaY * orbitState.zoomSpeed * 0.1);
     orbitState.radius = clamp(nextRadius, orbitState.minRadius, orbitState.maxRadius);
     applyOrbitPose();
@@ -789,11 +823,16 @@ function enableSingleOrbitController() {
     event.preventDefault();
   };
 
+  const onTouchStart = (event) => {
+    maybeCancelIntroForInput(event);
+  };
+
   sceneEl.addEventListener("pointerdown", onPointerDown, true);
   sceneEl.addEventListener("pointermove", onPointerMove, true);
   sceneEl.addEventListener("pointerup", endDrag, true);
   sceneEl.addEventListener("pointercancel", endDrag, true);
   sceneEl.addEventListener("wheel", onWheel, { passive: false, capture: true });
+  sceneEl.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
 }
 
 function applyBrightness() {
@@ -849,25 +888,46 @@ function applyView() {
   disablePanOnControls();
 }
 
+function cancelViewLock() {
+  viewLockToken += 1;
+}
+
 function lockView(frames) {
-  applyView();
-  if (frames > 0) {
-    requestAnimationFrame(() => lockView(frames - 1));
-  }
+  const token = ++viewLockToken;
+  const totalFrames = Math.max(0, Math.floor(Number(frames) || 0));
+
+  const step = (remaining) => {
+    if (token !== viewLockToken) {
+      return;
+    }
+    applyView();
+    if (remaining > 0) {
+      requestAnimationFrame(() => step(remaining - 1));
+    }
+  };
+
+  step(totalFrames);
 }
 
 function getIntroTotalMs() {
   if (!(INTRO_CONFIG.enabled && runtime.introEnabled)) {
     return 0;
   }
+
+  const showOverlay =
+    INTRO_CONFIG.showRevealOverlay !== false && parseNumber(INTRO_CONFIG.revealFadeMs, 0) > 0;
+  const showParticles =
+    INTRO_CONFIG.particlesEnabled !== false &&
+    parseNumber(INTRO_CONFIG.particleCount, 0) > 0 &&
+    parseNumber(INTRO_CONFIG.particleDurationMs, 0) > 0;
   const motionDuration = Math.max(
     parseNumber(INTRO_CONFIG.spinDurationMs, 0),
-    parseNumber(INTRO_CONFIG.particleDurationMs, 0),
+    showParticles ? parseNumber(INTRO_CONFIG.particleDurationMs, 0) : 0,
   );
   return (
     parseNumber(INTRO_CONFIG.preSpinHoldMs, 0) +
     motionDuration +
-    parseNumber(INTRO_CONFIG.revealFadeMs, 0) +
+    (showOverlay ? parseNumber(INTRO_CONFIG.revealFadeMs, 0) : 0) +
     parseNumber(INTRO_CONFIG.settleMs, 0)
   );
 }
@@ -1245,6 +1305,9 @@ const introController = new IntroController({
     introRotationOffset = offset;
     applyStreamTransform();
   },
+  onStateChange: (state) => {
+    annotationManager.setIntroPlaybackState?.(state, performance.now());
+  },
 });
 
 function goTo(index) {
@@ -1358,6 +1421,10 @@ async function init() {
   annotationManager.configure(activeAnnotationsConfig, MIRIS_ASSETS.map((asset) => asset.id));
   annotationManager.setActiveAssetId(activeAsset.id);
   annotationManager.setLiveCameraPose(enforceFixedPivot(readCameraPose()));
+  annotationManager.setIntroPlaybackState(
+    INTRO_CONFIG.enabled && runtime.introEnabled ? "running" : "completed",
+    performance.now(),
+  );
 
   requestAnimationFrame(onFrame);
 

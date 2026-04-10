@@ -130,17 +130,18 @@ miris-stream {
   margin-top: -13px;
   border: 0;
   border-radius: 999px;
-  background: #000;
-  color: #fff;
+  background: var(--annotation-pin-bg, #000);
+  color: var(--annotation-pin-fg, #fff);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
   pointer-events: auto;
   cursor: pointer;
+  transition: opacity 220ms ease, background-color 260ms ease;
 }
 
 .annotation-pin.is-selected {
-  background: #111;
+  background: var(--annotation-pin-selected-bg, #111);
 }
 
 .annotation-pin.is-occluded {
@@ -150,6 +151,11 @@ miris-stream {
 .annotation-pin:focus,
 .annotation-pin:focus-visible {
   outline: none;
+}
+
+.annotation-overlay.is-intro-grey .annotation-pin {
+  --annotation-pin-bg: var(--annotation-intro-pin-bg, #7f7f7f);
+  --annotation-pin-selected-bg: var(--annotation-intro-pin-bg, #7f7f7f);
 }
 
 .annotation-tooltip {

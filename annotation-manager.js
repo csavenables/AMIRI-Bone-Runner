@@ -46,6 +46,11 @@ function easeInOutSine(t) {
   return 0.5 * (1 - Math.cos(Math.PI * x));
 }
 
+function lerpNumber(from, to, t) {
+  const x = clamp(t, 0, 1);
+  return from + (to - from) * x;
+}
+
 export class AnnotationManager {
   constructor(options) {
     this.options = options;
@@ -74,6 +79,15 @@ export class AnnotationManager {
     this.offscreenRecoveryExpiresAt = 0;
     this.debugTransformSync = Boolean(options.debugTransformSync);
     this.transformSyncWarned = false;
+    this.introPinOptions = {
+      enabled: false,
+      fadeMs: 700,
+      greyAlpha: 0.4,
+      greyColor: "#7f7f7f",
+    };
+    this.introPlaybackState = "completed";
+    this.introFadeStartMs = 0;
+    this.introFadeProgress = 1;
     this.lastOcclusionDebug = {
       requestedMode: "heuristic",
       activeMode: "heuristic",
@@ -99,6 +113,10 @@ export class AnnotationManager {
     this.offscreenRecoveryTriggered = false;
     this.offscreenRecoveryExpiresAt = performance.now() + 7000;
     this.transformSyncWarned = false;
+    this.introPinOptions = this.getIntroPinOptions();
+    this.introPlaybackState = "completed";
+    this.introFadeStartMs = 0;
+    this.introFadeProgress = 1;
     this.occlusionResolver.configure({
       mode: this.getOcclusionConfig().mode,
       cameraEl: this.options.cameraEl,
@@ -114,10 +132,6 @@ export class AnnotationManager {
     };
 
     this.overlay.setVisible(Boolean(this.config && this.pins.length > 0));
-
-    if (this.config?.defaultSelectedId) {
-      this.selectAnnotation(this.config.defaultSelectedId);
-    }
 
     this.emitEditorState();
   }
@@ -140,8 +154,10 @@ export class AnnotationManager {
       return;
     }
 
-    const projectedPins = this.projectPins(width, height, nowMs);
+    const introPresentation = this.getIntroPresentation(nowMs);
+    const projectedPins = this.projectPins(width, height, nowMs, introPresentation);
     if (
+      introPresentation.pinsVisible &&
       !this.offscreenRecoveryTriggered &&
       projectedPins.length > 0 &&
       projectedPins.every((entry) => !entry.visible) &&
@@ -156,19 +172,29 @@ export class AnnotationManager {
     const selectedIndex = this.selectedId
       ? visiblePins.findIndex((pin) => pin.id === this.selectedId)
       : -1;
+    const hasAny = visiblePins.length > 0;
     const hasMany = visiblePins.length > 1;
-    const canPrev = this.wrapNavigation ? hasMany : selectedIndex > 0;
-    const canNext = this.wrapNavigation
-      ? hasMany
-      : selectedIndex >= 0 && selectedIndex < visiblePins.length - 1;
+    const canNavigateFromNone = selectedIndex < 0 && hasAny;
+    const canPrev = canNavigateFromNone
+      ? true
+      : this.wrapNavigation
+        ? hasMany
+        : selectedIndex > 0;
+    const canNext = canNavigateFromNone
+      ? true
+      : this.wrapNavigation
+        ? hasMany
+        : selectedIndex >= 0 && selectedIndex < visiblePins.length - 1;
 
     this.overlay.render({
       pins: projectedPins,
       selectedId: this.selectedId,
-      showTooltip: Boolean(this.config.ui?.showTooltip),
-      showNav: Boolean(this.config.ui?.showNav),
+      showTooltip: Boolean(this.config.ui?.showTooltip) && introPresentation.tooltipReady,
+      showNav: Boolean(this.config.ui?.showNav) && introPresentation.navReady,
       canPrev,
       canNext,
+      introGreyActive: introPresentation.introGreyActive,
+      introPinColor: this.introPinOptions.greyColor,
     });
   }
 
@@ -219,17 +245,53 @@ export class AnnotationManager {
     this.emitEditorState();
   }
 
-  selectAnnotation(id) {
+  setIntroPlaybackState(state, nowMs = performance.now()) {
+    if (!this.introPinOptions.enabled) {
+      this.introPlaybackState = "completed";
+      this.introFadeProgress = 1;
+      this.introFadeStartMs = 0;
+      return;
+    }
+
+    const phase = String(state || "").toLowerCase();
+    if (phase === "running") {
+      this.introPlaybackState = "running";
+      this.introFadeProgress = 0;
+      this.introFadeStartMs = 0;
+      return;
+    }
+
+    if (phase === "cancelled") {
+      this.introPlaybackState = "cancelled";
+      this.introFadeProgress = 0;
+      this.introFadeStartMs = 0;
+      return;
+    }
+
+    if (phase === "completed") {
+      this.introPlaybackState = "completed";
+      this.introFadeStartMs = nowMs;
+      this.introFadeProgress = this.introPinOptions.fadeMs <= 0 ? 1 : 0;
+      return;
+    }
+  }
+
+  selectAnnotation(id, options = {}) {
     const pin = this.pins.find((entry) => entry.id === id);
     if (!pin) {
       return;
     }
 
+    const animate = options.animate !== false;
     const target = this.getPreferredTarget(this.cameraTarget);
     this.selectedId = id;
     this.cameraTarget = [...target];
-    this.pendingAnimateFov = pin.camera.fov;
-    this.animateCameraTo(pin.camera.position, undefined, target);
+    if (animate) {
+      this.pendingAnimateFov = pin.camera.fov;
+      this.animateCameraTo(pin.camera.position, undefined, target);
+    } else {
+      this.stopCameraAnimation();
+    }
     this.applyCameraFov(pin.camera.fov);
     this.emitEditorState();
   }
@@ -448,6 +510,61 @@ export class AnnotationManager {
     return { durationMs, easing, distanceScale };
   }
 
+  getIntroPinOptions() {
+    const ui = this.config?.ui ?? {};
+    return {
+      enabled: Boolean(ui.introPinsHidden),
+      fadeMs: Math.max(0, Number(ui.introPinFadeMs) || 700),
+      greyAlpha: clamp(Number(ui.introPinGreyAlpha ?? 0.4), 0, 1),
+      greyColor: String(ui.introPinGreyColor || "#7f7f7f"),
+    };
+  }
+
+  getIntroPresentation(nowMs) {
+    if (!this.introPinOptions.enabled) {
+      return {
+        pinsVisible: true,
+        fade: 1,
+        navReady: true,
+        tooltipReady: true,
+        introGreyActive: false,
+      };
+    }
+
+    if (this.introPlaybackState === "running" || this.introPlaybackState === "cancelled") {
+      return {
+        pinsVisible: false,
+        fade: 0,
+        navReady: false,
+        tooltipReady: false,
+        introGreyActive: true,
+      };
+    }
+
+    if (this.introPlaybackState === "completed") {
+      if (this.introFadeProgress < 1) {
+        const elapsed = Math.max(0, nowMs - this.introFadeStartMs);
+        const fadeMs = Math.max(1, this.introPinOptions.fadeMs);
+        this.introFadeProgress = clamp(elapsed / fadeMs, 0, 1);
+      }
+      return {
+        pinsVisible: this.introFadeProgress > 0.001,
+        fade: this.introFadeProgress,
+        navReady: true,
+        tooltipReady: true,
+        introGreyActive: true,
+      };
+    }
+
+    return {
+      pinsVisible: true,
+      fade: 1,
+      navReady: true,
+      tooltipReady: true,
+      introGreyActive: false,
+    };
+  }
+
   buildHeuristicOcclusion(projected, width, height, streamPosition, pose, declutterConfig) {
     const centerProjection = projectPointToScreen({
       world: streamPosition,
@@ -531,7 +648,7 @@ export class AnnotationManager {
     return hiddenCount;
   }
 
-  projectPins(width, height, nowMs) {
+  projectPins(width, height, nowMs, introPresentation = null) {
     const streamPosition = this.getStreamPosition();
     const streamRotation = this.getStreamRotationY();
     const streamScale = this.getStreamScale();
@@ -675,6 +792,18 @@ export class AnnotationManager {
       entry.occluded = occluded;
       entry.alpha = alpha;
       entry.clickable = isSelected || !occluded || !occlusionConfig.disableClickWhenOccluded;
+    }
+
+    const introFade = clamp(introPresentation?.fade ?? 1, 0, 1);
+    const introGreyAlpha = this.introPinOptions.greyAlpha;
+    for (const entry of projected) {
+      const targetAlpha = Math.max(entry.alpha, introGreyAlpha);
+      entry.alpha = lerpNumber(0, targetAlpha, introFade);
+      if (!(introPresentation?.pinsVisible ?? true)) {
+        entry.visible = false;
+        entry.alpha = 0;
+        entry.clickable = false;
+      }
     }
 
     const hiddenByDeclutter = this.applyDeclutter(projected, width, height, declutterConfig);

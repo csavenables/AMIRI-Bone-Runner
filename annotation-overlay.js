@@ -74,6 +74,14 @@ export class AnnotationOverlay {
   }
 
   render(model) {
+    const introGreyActive = Boolean(model.introGreyActive);
+    this.root.classList.toggle("is-intro-grey", introGreyActive);
+    if (model.introPinColor) {
+      this.root.style.setProperty("--annotation-intro-pin-bg", model.introPinColor);
+    } else {
+      this.root.style.removeProperty("--annotation-intro-pin-bg");
+    }
+
     for (const projected of model.pins) {
       let element = this.pinElements.get(projected.pin.id);
       if (!element) {
@@ -116,9 +124,10 @@ export class AnnotationOverlay {
       this.tooltip.style.top = `${Math.max(12, Math.min(height - 120, selectedPin.screenY + 16))}px`;
     }
 
-    const showNav = Boolean(model.selectedId && model.showNav);
+    const showNav = Boolean(model.showNav);
     this.nav.classList.toggle("hidden", !showNav);
     this.prevButton.disabled = !model.canPrev;
+    this.closeButton.disabled = !model.selectedId;
     this.nextButton.disabled = !model.canNext;
   }
 

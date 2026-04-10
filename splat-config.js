@@ -49,6 +49,10 @@ export const INTRO_CONFIG = {
   particlesEnabled: false,
   spinDegrees: 180,
   spinDirection: 1,
+  finalOffsetDegrees: -45,
+  cancelOnUserInput: true,
+  cancelInputTypes: ["pointerdown", "pointermove", "wheel", "touchstart"],
+  cancelSettleMs: 140,
   spinDurationMs: 2300,
   preSpinHoldMs: 120,
   particleDurationMs: 1300,
@@ -63,7 +67,7 @@ export const INTRO_CONFIG = {
 
 export const ANNOTATIONS_CONFIG = {
   enabled: true,
-  defaultSelectedId: "pin_1",
+  defaultSelectedId: null,
   pins: [
     {
       id: "pin_1",
@@ -101,6 +105,10 @@ export const ANNOTATIONS_CONFIG = {
     showNav: true,
     pinStyle: "numbered",
     wrapNavigation: true,
+    introPinsHidden: true,
+    introPinFadeMs: 700,
+    introPinGreyAlpha: 0.4,
+    introPinGreyColor: "#7f7f7f",
     cameraMotion: {
       durationMs: 1700,
       easing: "sine",
