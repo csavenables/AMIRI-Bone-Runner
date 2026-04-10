@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+
+reference/SplatViewerV/node_modules/
+reference/SplatViewerV/dist/
+reference/SplatViewerV/.vite/
+reference/SplatViewerV/.cache/
+reference/
+
+.DS_Store
+Thumbs.db

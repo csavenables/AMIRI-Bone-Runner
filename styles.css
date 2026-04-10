@@ -1,0 +1,505 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background: #f2f2f2;
+  overflow: hidden;
+  font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+}
+
+miris-scene {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+miris-stream {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#controls {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.scene-nav {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  pointer-events: auto;
+}
+
+.scene-btn {
+  border: 0;
+  background: transparent;
+  color: #000;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+.scene-btn.is-active {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.scene-btn:focus,
+.scene-btn:focus-visible {
+  outline: none;
+}
+
+.scene-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #000;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scene-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+.scene-arrow--left {
+  left: 16px;
+}
+
+.scene-arrow--right {
+  right: 16px;
+}
+
+.scene-arrow:focus,
+.scene-arrow:focus-visible {
+  outline: none;
+}
+
+.annotation-host {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.annotation-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.annotation-pins {
+  position: absolute;
+  inset: 0;
+}
+
+.annotation-pin {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  margin-top: -13px;
+  border: 0;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.annotation-pin.is-selected {
+  background: #111;
+}
+
+.annotation-pin.is-occluded {
+  opacity: 0.4;
+}
+
+.annotation-pin:focus,
+.annotation-pin:focus-visible {
+  outline: none;
+}
+
+.annotation-tooltip {
+  position: absolute;
+  width: min(280px, calc(100vw - 24px));
+  padding: 10px 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.annotation-tooltip-title {
+  margin: 0 0 4px;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.annotation-tooltip-body {
+  margin: 0;
+  color: #000;
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.annotation-nav {
+  position: absolute;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(300px, calc(100% - 24px));
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.annotation-nav-btn {
+  border: 0;
+  background: transparent;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.annotation-nav-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.annotation-nav-btn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.annotation-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.annotation-nav-btn:focus,
+.annotation-nav-btn:focus-visible {
+  outline: none;
+}
+
+.annotation-editor {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 15;
+  width: min(320px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  padding: 12px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.95);
+  color: #000;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.annotation-editor-toggle {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  top: max(14px, env(safe-area-inset-top));
+  z-index: 16;
+  border: 0;
+  background: #fff;
+  color: #000;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.annotation-editor-toggle:focus,
+.annotation-editor-toggle:focus-visible {
+  outline: none;
+}
+
+.framing-panel {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 15;
+  width: min(320px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  padding: 12px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.95);
+  color: #000;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.occ-debug {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 16;
+  width: min(320px, calc(100vw - 28px));
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #000;
+  border: 0;
+  pointer-events: none;
+}
+
+.occ-debug-title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.occ-debug-line {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.framing-panel-title {
+  margin: 0;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.framing-panel-subtitle {
+  margin: 6px 0 0;
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.framing-panel-note {
+  margin: 0;
+  color: #000;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.annotation-editor-title {
+  margin: 0;
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.annotation-editor-status {
+  margin: 0;
+  color: #000;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.annotation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.annotation-check {
+  justify-content: flex-start;
+}
+
+.annotation-row input,
+.annotation-row select,
+.annotation-row textarea {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #d7d7d7;
+  background: #fff;
+  color: #000;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 6px 8px;
+}
+
+.annotation-row textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.annotation-row input:focus,
+.annotation-row select:focus,
+.annotation-row textarea:focus {
+  outline: none;
+}
+
+.annotation-textarea-row {
+  align-items: flex-start;
+}
+
+.annotation-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.annotation-btn {
+  border: 0;
+  background: #000;
+  color: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+
+.annotation-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.annotation-btn:focus,
+.annotation-btn:focus-visible {
+  outline: none;
+}
+
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+  background: #fff;
+}
+
+.intro-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+
+.replay-button {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 16;
+  border: 0;
+  background: #000;
+  color: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.replay-button:focus,
+.replay-button:focus-visible {
+  outline: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  .scene-arrow {
+    width: 38px;
+    height: 38px;
+  }
+
+  .annotation-pin {
+    width: 30px;
+    height: 30px;
+    margin-left: -15px;
+    margin-top: -15px;
+  }
+
+  .annotation-editor {
+    top: auto;
+    right: 8px;
+    bottom: 56px;
+    width: min(340px, calc(100vw - 16px));
+    max-height: min(62dvh, 560px);
+  }
+
+  .annotation-editor-toggle {
+    top: 8px;
+    right: 8px;
+  }
+
+  .framing-panel {
+    top: 8px;
+    left: 8px;
+    width: min(340px, calc(100vw - 16px));
+    max-height: min(50dvh, 420px);
+  }
+}
