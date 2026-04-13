@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+
+if ! git ls-files --error-unmatch annotations-live.json >/dev/null 2>&1; then
+  echo "pre-push guard failed: annotations-live.json is not tracked by git." >&2
+  exit 1
+fi
+
+if [ -n "$(git diff --name-only -- annotations-live.json)" ]; then
+  echo "pre-push guard failed: annotations-live.json has unstaged changes. Stage or commit before push." >&2
+  exit 1
+fi
+
+node scripts/check-annotations-canonical.js
+status=$?
+if [ "$status" -ne 0 ]; then
+  exit "$status"
+fi
+
+exit 0

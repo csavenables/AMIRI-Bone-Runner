@@ -349,6 +349,7 @@ const frameQueryKey = AUTHORING_CONFIG.queryKey || "frame";
 const CANONICAL_ANNOTATIONS_URL = "./annotations-live.json";
 const CANONICAL_ANNOTATIONS_HANDLE_KEY = "amiri-canonical";
 const CANONICAL_ANNOTATIONS_SAVE_ENDPOINT = "/api/annotations-live";
+const REPO_STATUS_ENDPOINT = "/api/repo-status";
 const localHostnames = new Set(["127.0.0.1", "localhost"]);
 const defaultLocalOverride = localHostnames.has(window.location.hostname);
 const runtime = {
@@ -387,6 +388,8 @@ const editorUiState = {
   available: false,
 };
 let persistenceStatusLabel = "Fallback to config";
+let canonicalSourceStatusLabel = "Canonical source: unknown";
+let commitHintLabel = "";
 
 const persistence = new AnnotationPersistence();
 const authoring = new AnnotationAuthoring(editorEnabled);
@@ -983,7 +986,11 @@ async function saveAnnotations() {
       body: JSON.stringify({ annotations }),
     });
     if (response.ok) {
-      canonicalViaDevServer = { ok: true };
+      const parsed = await response.json().catch(() => ({}));
+      canonicalViaDevServer = {
+        ok: true,
+        repoStatus: isObject(parsed) ? parsed : null,
+      };
     } else {
       canonicalViaDevServer = { ok: false, reason: `HTTP ${response.status}` };
     }
@@ -994,6 +1001,8 @@ async function saveAnnotations() {
   if (localResult.ok && canonicalViaDevServer?.ok) {
     activeAnnotationsConfig = deepClone(annotations);
     setPersistenceStatusLabel("Saved locally + repo annotations-live.json");
+    setCanonicalSourceStatusLabel("Canonical source: repo file loaded");
+    applyCommitHintFromRepoStatus(canonicalViaDevServer.repoStatus);
     annotationManager.emitEditorState?.();
     return;
   }
@@ -1001,6 +1010,8 @@ async function saveAnnotations() {
   if (!localResult.ok && canonicalViaDevServer?.ok) {
     activeAnnotationsConfig = deepClone(annotations);
     setPersistenceStatusLabel("Saved repo annotations-live.json (local cache unavailable)");
+    setCanonicalSourceStatusLabel("Canonical source: repo file loaded");
+    applyCommitHintFromRepoStatus(canonicalViaDevServer.repoStatus);
     annotationManager.emitEditorState?.();
     return;
   }
@@ -1014,6 +1025,8 @@ async function saveAnnotations() {
   if (localResult.ok && canonicalResult.ok) {
     activeAnnotationsConfig = deepClone(annotations);
     setPersistenceStatusLabel("Saved locally + canonical file handle");
+    setCanonicalSourceStatusLabel("Canonical source: external file handle");
+    applyCommitHintFromRepoStatus(await fetchRepoStatus());
     annotationManager.emitEditorState?.();
     return;
   }
@@ -1025,6 +1038,8 @@ async function saveAnnotations() {
     console.warn(`Canonical annotation file fallback used: ${reason}`);
     activeAnnotationsConfig = deepClone(annotations);
     setPersistenceStatusLabel("Saved locally + downloaded annotations-live.json");
+    setCanonicalSourceStatusLabel("Canonical source: downloaded file (not repo synced)");
+    applyCommitHintFromRepoStatus(await fetchRepoStatus());
     annotationManager.emitEditorState?.();
     return;
   }
@@ -1033,6 +1048,8 @@ async function saveAnnotations() {
   triggerDownload("amiri-annotations.json", payload);
   console.warn(`Annotation save fallback used: ${localResult.reason}`);
   setPersistenceStatusLabel("Local save failed (downloaded JSON)");
+  setCanonicalSourceStatusLabel("Canonical source: unchanged");
+  applyCommitHintFromRepoStatus(await fetchRepoStatus());
   annotationManager.emitEditorState?.();
 }
 
@@ -1121,6 +1138,39 @@ function setPersistenceStatusLabel(text) {
   persistenceStatusLabel = text;
 }
 
+function setCanonicalSourceStatusLabel(text) {
+  canonicalSourceStatusLabel = text;
+}
+
+function setCommitHintLabel(text) {
+  commitHintLabel = text;
+}
+
+async function fetchRepoStatus() {
+  try {
+    const response = await fetch(REPO_STATUS_ENDPOINT, { cache: "no-store" });
+    if (!response.ok) {
+      return null;
+    }
+    const parsed = await response.json();
+    return isObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyCommitHintFromRepoStatus(repoStatus) {
+  if (!isObject(repoStatus) || repoStatus.available !== true) {
+    setCommitHintLabel("");
+    return;
+  }
+  if (repoStatus.annotationsDirty === true) {
+    setCommitHintLabel("Canonical updated; commit + push required");
+    return;
+  }
+  setCommitHintLabel("");
+}
+
 function renderEditorState(state) {
   if (!editorEnabled) {
     return;
@@ -1133,7 +1183,11 @@ function renderEditorState(state) {
   const modeLabel = state.occlusionMode || (state.occlusionAvailable ? "native-depth" : "heuristic");
   const reasonLabel = state.occlusionReason || (state.occlusionAvailable ? "native" : "fallback");
   const occlusionText = `Occlusion: ${modeLabel} (${reasonLabel})`;
-  editor.status.textContent = `${persistenceStatusLabel} - ${occlusionText}`;
+  const statusBits = [persistenceStatusLabel, canonicalSourceStatusLabel];
+  if (commitHintLabel) {
+    statusBits.push(commitHintLabel);
+  }
+  editor.status.textContent = `${statusBits.join(" - ")} - ${occlusionText}`;
 
   editor.pinSelect.innerHTML = "";
   for (const pin of state.pins) {
@@ -1326,6 +1380,8 @@ async function loadAnnotationConfig() {
 
   if (!runtime.annotationsEnabled) {
     setPersistenceStatusLabel("Annotations disabled");
+    setCanonicalSourceStatusLabel("Canonical source: disabled");
+    applyCommitHintFromRepoStatus(await fetchRepoStatus());
     return { ...base, enabled: false };
   }
 
@@ -1377,6 +1433,8 @@ async function loadAnnotationConfig() {
     const canonical = await loadCanonicalFromUrl();
     if (canonical) {
       setPersistenceStatusLabel("Loaded canonical file");
+      setCanonicalSourceStatusLabel("Canonical source: repo file loaded");
+      applyCommitHintFromRepoStatus(await fetchRepoStatus());
       return mergeAnnotationConfig(canonical);
     }
   }
@@ -1388,9 +1446,16 @@ async function loadAnnotationConfig() {
       setPersistenceStatusLabel(
         runtime.annotationLocalOverride ? "Loaded local override" : "Loaded local fallback",
       );
+      setCanonicalSourceStatusLabel(
+        runtime.annotationLocalOverride
+          ? "Canonical source: local override"
+          : "Canonical source: local fallback",
+      );
     } else if (loadedRecord.source === "legacy-file") {
       setPersistenceStatusLabel("Loaded legacy file (migrated local)");
+      setCanonicalSourceStatusLabel("Canonical source: legacy file");
     }
+    applyCommitHintFromRepoStatus(await fetchRepoStatus());
     return mergeAnnotationConfig(loaded);
   }
 
@@ -1398,11 +1463,15 @@ async function loadAnnotationConfig() {
     const canonical = await loadCanonicalFromUrl();
     if (canonical) {
       setPersistenceStatusLabel("Loaded canonical fallback");
+      setCanonicalSourceStatusLabel("Canonical source: repo file loaded");
+      applyCommitHintFromRepoStatus(await fetchRepoStatus());
       return mergeAnnotationConfig(canonical);
     }
   }
 
   setPersistenceStatusLabel("Fallback to config");
+  setCanonicalSourceStatusLabel("Canonical source: config fallback");
+  applyCommitHintFromRepoStatus(await fetchRepoStatus());
   return base;
 }
 

@@ -2,6 +2,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import argparse
 import json
 from pathlib import Path
+import subprocess
+from urllib.parse import urlparse
 
 
 def build_handler(cross_origin_isolated: bool):
@@ -9,8 +11,74 @@ def build_handler(cross_origin_isolated: bool):
     annotations_path = project_root / "annotations-live.json"
 
     class MirisHandler(SimpleHTTPRequestHandler):
+        def write_json(self, status_code: int, payload: dict):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def get_repo_status(self) -> dict:
+            status = {
+                "available": False,
+                "annotationsDirty": None,
+                "annotationsTracked": None,
+                "branch": None,
+                "head": None,
+            }
+            try:
+                branch = subprocess.run(
+                    ["git", "branch", "--show-current"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                head = subprocess.run(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                tracked = subprocess.run(
+                    ["git", "ls-files", "--error-unmatch", "annotations-live.json"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                dirty = subprocess.run(
+                    ["git", "status", "--porcelain", "--", "annotations-live.json"],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                status.update(
+                    {
+                        "available": branch.returncode == 0,
+                        "branch": branch.stdout.strip() or None,
+                        "head": head.stdout.strip() or None,
+                        "annotationsTracked": tracked.returncode == 0,
+                        "annotationsDirty": bool((dirty.stdout or "").strip()),
+                    }
+                )
+            except Exception:
+                return status
+            return status
+
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/repo-status":
+                return super().do_GET()
+
+            self.write_json(200, {"ok": True, **self.get_repo_status()})
+
         def do_POST(self):
-            if self.path != "/api/annotations-live":
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/annotations-live":
                 self.send_error(404, "Not Found")
                 return
 
@@ -38,12 +106,14 @@ def build_handler(cross_origin_isolated: bool):
                 self.send_error(500, "Unable to write annotations-live.json")
                 return
 
-            response = json.dumps({"ok": True, "path": str(annotations_path.name)}).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(response)))
-            self.end_headers()
-            self.wfile.write(response)
+            self.write_json(
+                200,
+                {
+                    "ok": True,
+                    "path": str(annotations_path.name),
+                    **self.get_repo_status(),
+                },
+            )
 
         def end_headers(self):
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")

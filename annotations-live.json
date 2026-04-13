@@ -12,8 +12,8 @@
           0.03,
           0.06
         ],
-        "title": "Center Detail",
-        "body": "Primary annotation point for the single streaming asset.",
+        "title": "Mesh Details",
+        "body": "HIGH QUALITY WOVEN MESH DETAILING",
         "camera": {
           "position": [
             -0.647759064277148,
@@ -35,17 +35,17 @@
         "assetId": "splat-1",
         "order": 2,
         "pos": [
-          -0.1,
-          0.02,
-          -0.02
+          -0.13,
+          3.469446951953614e-18,
+          -0.01
         ],
-        "title": "Left Feature",
-        "body": "Secondary annotation point for interactive walkthroughs.",
+        "title": "HEEL LOGO",
+        "body": "",
         "camera": {
           "position": [
-            0.6969620573439136,
-            0.09344965815832534,
-            0.36361943292678406
+            0.4215675627717628,
+            0.013848687674256961,
+            -0.627355476576077
           ],
           "target": [
             0,
@@ -61,12 +61,12 @@
         "id": "pin_3",
         "order": 3,
         "pos": [
-          0.16,
+          0.15,
           0,
           0
         ],
-        "title": "Annotation 3",
-        "body": "Edit this description.",
+        "title": "STICHED BONES",
+        "body": "INDIVIDUALLY STITCHED LEATHER",
         "assetId": "splat-1",
         "camera": {
           "position": [
