@@ -43,9 +43,9 @@
         "body": "",
         "camera": {
           "position": [
-            0.4215675627717628,
-            0.013848687674256961,
-            -0.627355476576077
+            0.8239495223175187,
+            0.5816243828262209,
+            -0.4985338719490477
           ],
           "target": [
             0,
@@ -61,18 +61,45 @@
         "id": "pin_3",
         "order": 3,
         "pos": [
-          0.15,
-          0,
-          0
+          -0.010000000000000004,
+          0.05,
+          -0.05
         ],
-        "title": "STICHED BONES",
-        "body": "INDIVIDUALLY STITCHED LEATHER",
+        "title": "LACE-UP CLOSURE",
+        "body": "PREMIUM LACES",
         "assetId": "splat-1",
         "camera": {
           "position": [
             -0.2589542007662435,
             0.2910037014118388,
             0.9768143010978837
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
+          "fov": 38,
+          "transitionMs": 1700,
+          "lockControls": false
+        }
+      },
+      {
+        "id": "pin_4",
+        "order": 4,
+        "pos": [
+          0.11999999999999998,
+          0.01,
+          0
+        ],
+        "title": "STICHED BONES",
+        "body": "INDIVIDUALLY STITCHED LEATHER BONES",
+        "assetId": "splat-1",
+        "camera": {
+          "position": [
+            -0.7647138617255802,
+            0.23270639532169507,
+            0.5250306115463504
           ],
           "target": [
             0,
