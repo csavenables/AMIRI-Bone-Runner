@@ -7,12 +7,24 @@
         "id": "pin_1",
         "assetId": "splat-1",
         "order": 1,
-        "pos": [0, 0.03, 0.06],
+        "pos": [
+          0,
+          0.03,
+          0.06
+        ],
         "title": "Center Detail",
         "body": "Primary annotation point for the single streaming asset.",
         "camera": {
-          "position": [0.18, 1.24, 0.89],
-          "target": [0.04, 0.72, 0.02],
+          "position": [
+            -0.647759064277148,
+            0.2758679588435065,
+            -0.5507673063407339
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
           "fov": 38,
           "transitionMs": 750,
           "lockControls": false
@@ -22,14 +34,53 @@
         "id": "pin_2",
         "assetId": "splat-1",
         "order": 2,
-        "pos": [-0.1, 0.02, -0.02],
+        "pos": [
+          -0.1,
+          0.02,
+          -0.02
+        ],
         "title": "Left Feature",
         "body": "Secondary annotation point for interactive walkthroughs.",
         "camera": {
-          "position": [0.08, 1.26, 0.92],
-          "target": [0.04, 0.72, 0.02],
+          "position": [
+            0.6969620573439136,
+            0.09344965815832534,
+            0.36361943292678406
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
           "fov": 38,
           "transitionMs": 750,
+          "lockControls": false
+        }
+      },
+      {
+        "id": "pin_3",
+        "order": 3,
+        "pos": [
+          0.16,
+          0,
+          0
+        ],
+        "title": "Annotation 3",
+        "body": "Edit this description.",
+        "assetId": "splat-1",
+        "camera": {
+          "position": [
+            -0.2589542007662435,
+            0.2910037014118388,
+            0.9768143010978837
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
+          "fov": 38,
+          "transitionMs": 1700,
           "lockControls": false
         }
       }
