@@ -51,6 +51,10 @@ function parseNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function isObject(value) {
+  return typeof value === "object" && value !== null;
+}
+
 function parseVec3(value, fallback = [0, 0, 0]) {
   if (Array.isArray(value) && value.length >= 3) {
     const x = Number(value[0]);
@@ -115,9 +119,10 @@ function createAnnotationEditorHost(root, enabled) {
       Pin
       <select data-ann="pinSelect"></select>
     </label>
-    <div class="annotation-actions">
+    <div class="annotation-actions annotation-actions-primary">
       <button type="button" class="annotation-btn" data-ann="add">Add</button>
       <button type="button" class="annotation-btn" data-ann="delete">Delete</button>
+      <button type="button" class="annotation-btn" data-ann="captureCamera">Capture Camera</button>
       <button type="button" class="annotation-btn" data-ann="save">Save</button>
     </div>
     <label class="annotation-row">
@@ -182,6 +187,7 @@ function createAnnotationEditorHost(root, enabled) {
     body: panel.querySelector('textarea[data-ann="body"]'),
     add: getButton("add"),
     remove: getButton("delete"),
+    captureCamera: getButton("captureCamera"),
     save: getButton("save"),
     xMinus: getButton("x-"),
     xPlus: getButton("x+"),
@@ -340,6 +346,8 @@ function lengthVec3(v) {
 
 const params = new URLSearchParams(window.location.search);
 const frameQueryKey = AUTHORING_CONFIG.queryKey || "frame";
+const CANONICAL_ANNOTATIONS_URL = "./annotations-live.json";
+const CANONICAL_ANNOTATIONS_HANDLE_KEY = "amiri-canonical";
 const runtime = {
   introEnabled: parseBoolFlag(params.get("intro"), true),
   annotationsEnabled: parseBoolFlag(params.get("annotations"), true),
@@ -347,6 +355,7 @@ const runtime = {
   occDebugEnabled: parseBoolFlag(params.get("occdebug"), false),
   debugTransforms:
     parseBoolFlag(params.get("debugpins"), false) || parseBoolFlag(params.get("occdebug"), false),
+  annotationLocalOverride: parseBoolFlag(params.get("annlocal"), false),
   framingEnabled:
     Boolean(AUTHORING_CONFIG.framingPanelEnabled) && parseBoolFlag(params.get(frameQueryKey), false),
 };
@@ -962,17 +971,33 @@ async function saveAnnotations() {
     return;
   }
 
-  const result = await persistence.save("amiri", annotations);
-  if (result.ok) {
+  const localResult = await persistence.save("amiri", annotations);
+  const canonicalResult = await persistence.exportToFile(
+    CANONICAL_ANNOTATIONS_HANDLE_KEY,
+    annotations,
+    { suggestedName: "annotations-live.json" },
+  );
+
+  if (localResult.ok && canonicalResult.ok) {
     activeAnnotationsConfig = deepClone(annotations);
-    setPersistenceStatusLabel("Saved locally");
+    setPersistenceStatusLabel("Saved locally + canonical file");
+    annotationManager.emitEditorState?.();
+    return;
+  }
+
+  if (localResult.ok) {
+    const canonicalPayload = JSON.stringify({ annotations }, null, 2);
+    triggerDownload("annotations-live.json", canonicalPayload);
+    console.warn(`Canonical annotation file fallback used: ${canonicalResult.reason}`);
+    activeAnnotationsConfig = deepClone(annotations);
+    setPersistenceStatusLabel("Saved locally + downloaded annotations-live.json");
     annotationManager.emitEditorState?.();
     return;
   }
 
   const payload = JSON.stringify({ annotations }, null, 2);
   triggerDownload("amiri-annotations.json", payload);
-  console.warn(`Annotation save fallback used: ${result.reason}`);
+  console.warn(`Annotation save fallback used: ${localResult.reason}`);
   setPersistenceStatusLabel("Local save failed (downloaded JSON)");
   annotationManager.emitEditorState?.();
 }
@@ -996,6 +1021,14 @@ function wireEditorEvents() {
 
   editor.add?.addEventListener("click", () => annotationManager.addPin());
   editor.remove?.addEventListener("click", () => annotationManager.deleteSelected());
+  editor.captureCamera?.addEventListener("click", () => {
+    const captured = annotationManager.captureSelectedCameraFromLivePose();
+    if (!captured) {
+      return;
+    }
+    setPersistenceStatusLabel("Captured camera (not saved yet)");
+    annotationManager.emitEditorState?.();
+  });
   editor.save?.addEventListener("click", () => {
     void saveAnnotations();
   });
@@ -1066,7 +1099,7 @@ function renderEditorState(state) {
   const modeLabel = state.occlusionMode || (state.occlusionAvailable ? "native-depth" : "heuristic");
   const reasonLabel = state.occlusionReason || (state.occlusionAvailable ? "native" : "fallback");
   const occlusionText = `Occlusion: ${modeLabel} (${reasonLabel})`;
-  editor.status.textContent = `${persistenceStatusLabel} · ${occlusionText}`;
+  editor.status.textContent = `${persistenceStatusLabel} - ${occlusionText}`;
 
   editor.pinSelect.innerHTML = "";
   for (const pin of state.pins) {
@@ -1105,6 +1138,7 @@ function renderEditorState(state) {
   }
 
   editor.remove.disabled = !selected;
+  editor.captureCamera.disabled = !selected;
   const readonly = !state.editMode || !selected;
   editor.x.disabled = readonly;
   editor.y.disabled = readonly;
@@ -1261,19 +1295,7 @@ async function loadAnnotationConfig() {
     return { ...base, enabled: false };
   }
 
-  const loadedRecord = await persistence.load("amiri");
-  if (!loadedRecord?.annotations) {
-    setPersistenceStatusLabel("Fallback to config");
-    return base;
-  }
-  const loaded = loadedRecord.annotations;
-  if (loadedRecord.source === "local") {
-    setPersistenceStatusLabel("Loaded local");
-  } else if (loadedRecord.source === "legacy-file") {
-    setPersistenceStatusLabel("Loaded legacy file (migrated local)");
-  }
-
-  return {
+  const mergeAnnotationConfig = (loaded) => ({
     ...base,
     ...loaded,
     ui: {
@@ -1292,7 +1314,62 @@ async function loadAnnotationConfig() {
       },
     },
     pins: Array.isArray(loaded.pins) ? loaded.pins : base.pins,
+  });
+
+  const loadCanonicalFromUrl = async () => {
+    try {
+      const url = new URL(CANONICAL_ANNOTATIONS_URL, window.location.href);
+      url.searchParams.set("t", String(Date.now()));
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      if (!response.ok) {
+        return null;
+      }
+      const parsed = await response.json();
+      const loaded = isObject(parsed?.annotations)
+        ? parsed.annotations
+        : isObject(parsed)
+          ? parsed
+          : null;
+      if (!isObject(loaded)) {
+        return null;
+      }
+      return loaded;
+    } catch {
+      return null;
+    }
   };
+
+  if (!runtime.annotationLocalOverride) {
+    const canonical = await loadCanonicalFromUrl();
+    if (canonical) {
+      setPersistenceStatusLabel("Loaded canonical file");
+      return mergeAnnotationConfig(canonical);
+    }
+  }
+
+  const loadedRecord = await persistence.load("amiri");
+  if (loadedRecord?.annotations) {
+    const loaded = loadedRecord.annotations;
+    if (loadedRecord.source === "local") {
+      setPersistenceStatusLabel(
+        runtime.annotationLocalOverride ? "Loaded local override" : "Loaded local fallback",
+      );
+    } else if (loadedRecord.source === "legacy-file") {
+      setPersistenceStatusLabel("Loaded legacy file (migrated local)");
+    }
+    return mergeAnnotationConfig(loaded);
+  }
+
+  if (runtime.annotationLocalOverride) {
+    const canonical = await loadCanonicalFromUrl();
+    if (canonical) {
+      setPersistenceStatusLabel("Loaded canonical fallback");
+      return mergeAnnotationConfig(canonical);
+    }
+  }
+
+  setPersistenceStatusLabel("Fallback to config");
+  return base;
 }
 
 const introController = new IntroController({

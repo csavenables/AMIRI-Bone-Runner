@@ -1,0 +1,72 @@
+{
+  "annotations": {
+    "enabled": true,
+    "defaultSelectedId": null,
+    "pins": [
+      {
+        "id": "pin_1",
+        "assetId": "splat-1",
+        "order": 1,
+        "pos": [0, 0.03, 0.06],
+        "title": "Center Detail",
+        "body": "Primary annotation point for the single streaming asset.",
+        "camera": {
+          "position": [0.18, 1.24, 0.89],
+          "target": [0.04, 0.72, 0.02],
+          "fov": 38,
+          "transitionMs": 750,
+          "lockControls": false
+        }
+      },
+      {
+        "id": "pin_2",
+        "assetId": "splat-1",
+        "order": 2,
+        "pos": [-0.1, 0.02, -0.02],
+        "title": "Left Feature",
+        "body": "Secondary annotation point for interactive walkthroughs.",
+        "camera": {
+          "position": [0.08, 1.26, 0.92],
+          "target": [0.04, 0.72, 0.02],
+          "fov": 38,
+          "transitionMs": 750,
+          "lockControls": false
+        }
+      }
+    ],
+    "ui": {
+      "showTooltip": true,
+      "showNav": true,
+      "pinStyle": "numbered",
+      "wrapNavigation": true,
+      "introPinsHidden": true,
+      "introPinFadeMs": 700,
+      "introPinGreyAlpha": 0.4,
+      "introPinGreyColor": "#7f7f7f",
+      "cameraMotion": {
+        "durationMs": 1700,
+        "easing": "sine",
+        "distanceScale": 0.82
+      },
+      "declutter": {
+        "selectedOnlyStrong": true,
+        "unselectedAlpha": 0.18,
+        "maxVisibleUnselected": 6,
+        "silhouetteConfidenceThreshold": 0.66
+      },
+      "occlusion": {
+        "enabled": true,
+        "mode": "native-depth",
+        "fadeAlphaOccluded": 0.2,
+        "disableClickWhenOccluded": true,
+        "epsilon": 0.01
+      },
+      "transform": {
+        "fallbackRotationSign": -1
+      }
+    },
+    "editor": {
+      "enabled": true
+    }
+  }
+}

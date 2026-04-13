@@ -121,7 +121,7 @@ export class AnnotationPersistence {
     }
   }
 
-  async exportToFile(sceneId, annotations) {
+  async exportToFile(sceneId, annotations, options = {}) {
     if (!supportsFileAccessApi()) {
       return { ok: false, reason: "File System Access API is not available in this browser." };
     }
@@ -132,8 +132,12 @@ export class AnnotationPersistence {
         if (!window.showSaveFilePicker) {
           return { ok: false, reason: "File save picker is unavailable." };
         }
+        const suggestedName =
+          typeof options.suggestedName === "string" && options.suggestedName.trim()
+            ? options.suggestedName.trim()
+            : `${sceneId}.annotations.json`;
         handle = await window.showSaveFilePicker({
-          suggestedName: `${sceneId}.annotations.json`,
+          suggestedName,
           types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
         });
       } catch {

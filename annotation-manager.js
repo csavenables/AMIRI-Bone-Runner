@@ -296,6 +296,40 @@ export class AnnotationManager {
     this.emitEditorState();
   }
 
+  captureSelectedCameraFromLivePose() {
+    if (!this.config || !this.selectedId) {
+      return false;
+    }
+
+    const index = this.pins.findIndex((pin) => pin.id === this.selectedId);
+    if (index < 0) {
+      return false;
+    }
+
+    const existing = this.pins[index];
+    const capturePosition = this.liveCameraPose?.position
+      ? [...this.liveCameraPose.position]
+      : this.getCameraPosition();
+    const captureTarget = this.liveCameraPose?.target
+      ? this.getPreferredTarget(this.liveCameraPose.target)
+      : this.getPreferredTarget(this.cameraTarget);
+    const captureFov = this.getCameraFov();
+
+    this.pins[index] = {
+      ...existing,
+      camera: {
+        ...existing.camera,
+        position: [...capturePosition],
+        target: [...captureTarget],
+        fov: captureFov,
+      },
+    };
+
+    this.syncConfigPins();
+    this.emitEditorState();
+    return true;
+  }
+
   updateSelected(patch) {
     if (!this.config || !this.selectedId) {
       return;
@@ -307,7 +341,15 @@ export class AnnotationManager {
     }
 
     const existing = this.pins[index];
-    const cameraPosition = this.getCameraPosition();
+    const nextCamera = patch.camera
+      ? {
+          ...existing.camera,
+          ...patch.camera,
+          position: parseVec3(patch.camera.position, existing.camera.position),
+          target: parseVec3(patch.camera.target, existing.camera.target),
+          fov: parseNumber(patch.camera.fov, existing.camera.fov),
+        }
+      : existing.camera;
 
     this.pins[index] = {
       ...existing,
@@ -320,12 +362,7 @@ export class AnnotationManager {
           : patch.assetId === null || patch.assetId === "__all__"
             ? undefined
             : patch.assetId,
-      camera: {
-        ...existing.camera,
-        position: [...cameraPosition],
-        target: this.getPreferredTarget(this.cameraTarget),
-        fov: this.getCameraFov(),
-      },
+      camera: nextCamera,
     };
 
     this.syncConfigPins();

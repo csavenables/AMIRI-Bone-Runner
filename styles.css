@@ -410,6 +410,10 @@ miris-stream {
   gap: 6px;
 }
 
+.annotation-actions-primary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .annotation-btn {
   border: 0;
   background: #000;
