@@ -348,6 +348,9 @@ const params = new URLSearchParams(window.location.search);
 const frameQueryKey = AUTHORING_CONFIG.queryKey || "frame";
 const CANONICAL_ANNOTATIONS_URL = "./annotations-live.json";
 const CANONICAL_ANNOTATIONS_HANDLE_KEY = "amiri-canonical";
+const CANONICAL_ANNOTATIONS_SAVE_ENDPOINT = "/api/annotations-live";
+const localHostnames = new Set(["127.0.0.1", "localhost"]);
+const defaultLocalOverride = localHostnames.has(window.location.hostname);
 const runtime = {
   introEnabled: parseBoolFlag(params.get("intro"), true),
   annotationsEnabled: parseBoolFlag(params.get("annotations"), true),
@@ -355,7 +358,7 @@ const runtime = {
   occDebugEnabled: parseBoolFlag(params.get("occdebug"), false),
   debugTransforms:
     parseBoolFlag(params.get("debugpins"), false) || parseBoolFlag(params.get("occdebug"), false),
-  annotationLocalOverride: parseBoolFlag(params.get("annlocal"), false),
+  annotationLocalOverride: parseBoolFlag(params.get("annlocal"), defaultLocalOverride),
   framingEnabled:
     Boolean(AUTHORING_CONFIG.framingPanelEnabled) && parseBoolFlag(params.get(frameQueryKey), false),
 };
@@ -972,6 +975,36 @@ async function saveAnnotations() {
   }
 
   const localResult = await persistence.save("amiri", annotations);
+  let canonicalViaDevServer = null;
+  try {
+    const response = await fetch(CANONICAL_ANNOTATIONS_SAVE_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ annotations }),
+    });
+    if (response.ok) {
+      canonicalViaDevServer = { ok: true };
+    } else {
+      canonicalViaDevServer = { ok: false, reason: `HTTP ${response.status}` };
+    }
+  } catch {
+    canonicalViaDevServer = { ok: false, reason: "Dev server save endpoint unavailable" };
+  }
+
+  if (localResult.ok && canonicalViaDevServer?.ok) {
+    activeAnnotationsConfig = deepClone(annotations);
+    setPersistenceStatusLabel("Saved locally + repo annotations-live.json");
+    annotationManager.emitEditorState?.();
+    return;
+  }
+
+  if (!localResult.ok && canonicalViaDevServer?.ok) {
+    activeAnnotationsConfig = deepClone(annotations);
+    setPersistenceStatusLabel("Saved repo annotations-live.json (local cache unavailable)");
+    annotationManager.emitEditorState?.();
+    return;
+  }
+
   const canonicalResult = await persistence.exportToFile(
     CANONICAL_ANNOTATIONS_HANDLE_KEY,
     annotations,
@@ -980,7 +1013,7 @@ async function saveAnnotations() {
 
   if (localResult.ok && canonicalResult.ok) {
     activeAnnotationsConfig = deepClone(annotations);
-    setPersistenceStatusLabel("Saved locally + canonical file");
+    setPersistenceStatusLabel("Saved locally + canonical file handle");
     annotationManager.emitEditorState?.();
     return;
   }
@@ -988,7 +1021,8 @@ async function saveAnnotations() {
   if (localResult.ok) {
     const canonicalPayload = JSON.stringify({ annotations }, null, 2);
     triggerDownload("annotations-live.json", canonicalPayload);
-    console.warn(`Canonical annotation file fallback used: ${canonicalResult.reason}`);
+    const reason = canonicalViaDevServer?.reason || canonicalResult.reason;
+    console.warn(`Canonical annotation file fallback used: ${reason}`);
     activeAnnotationsConfig = deepClone(annotations);
     setPersistenceStatusLabel("Saved locally + downloaded annotations-live.json");
     annotationManager.emitEditorState?.();

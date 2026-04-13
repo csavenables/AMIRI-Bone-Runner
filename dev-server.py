@@ -1,9 +1,50 @@
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import argparse
+import json
+from pathlib import Path
 
 
 def build_handler(cross_origin_isolated: bool):
+    project_root = Path.cwd()
+    annotations_path = project_root / "annotations-live.json"
+
     class MirisHandler(SimpleHTTPRequestHandler):
+        def do_POST(self):
+            if self.path != "/api/annotations-live":
+                self.send_error(404, "Not Found")
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0") or 0)
+            if content_length <= 0:
+                self.send_error(400, "Empty body")
+                return
+
+            try:
+                raw = self.rfile.read(content_length)
+                payload = json.loads(raw.decode("utf-8"))
+            except Exception:
+                self.send_error(400, "Invalid JSON")
+                return
+
+            annotations = payload.get("annotations")
+            if not isinstance(annotations, dict):
+                self.send_error(400, "Missing annotations object")
+                return
+
+            try:
+                output = json.dumps({"annotations": annotations}, indent=2) + "\n"
+                annotations_path.write_text(output, encoding="utf-8")
+            except Exception:
+                self.send_error(500, "Unable to write annotations-live.json")
+                return
+
+            response = json.dumps({"ok": True, "path": str(annotations_path.name)}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
         def end_headers(self):
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
             self.send_header("Pragma", "no-cache")
